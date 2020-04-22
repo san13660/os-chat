@@ -6,6 +6,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <pthread.h>
+#include <sstream>
 
 #include <iostream>
 #include "mensaje.pb.h"
@@ -19,38 +20,6 @@ using namespace chat;
 #define TOO_LONG 2
 
 int sock = 0;
-char write_buffer[10];
-
-static int getLine (char *prmpt, char *buff, size_t sz) {
-	int ch, extra;
-
-	// Get line with buffer overrun protection.
-	if (prmpt != NULL)
-	{
-		printf ("%s", prmpt);
-		fflush (stdout);
-    	}
-	if (fgets (buff, sz, stdin) == NULL)
-	{
-		return NO_INPUT;
-	}
-
-	// If it was too long, there'll be no newline. In that case, we flush
-	// to end of line so that excess doesn't affect the next call.
-	if (buff[strlen(buff)-1] != '\n')
-	{
-		extra = 0;
-		while (((ch = getchar()) != '\n') && (ch != EOF))
-		{
-			extra = 1;
-		}
-	return (extra == 1) ? TOO_LONG : OK;
-	}
-
-	// Otherwise remove newline and give string back to caller.
-	buff[strlen(buff)-1] = '\0';
-	return OK;
-}
 
 void *listenServer(void *arg)
 {
@@ -59,7 +28,44 @@ void *listenServer(void *arg)
 		char read_buffer[1024] = {0};
 		int valread; 
 		valread = read( sock , read_buffer, sizeof(read_buffer)); 
-		printf("%s\n",read_buffer );
+		
+		if(valread == 0)
+		{
+			cout << "CONNECTION TO SERVER LOST" << endl;
+			exit(1);
+			break;
+		}
+		
+		string str(read_buffer);
+
+		ServerMessage serverMessage;
+		serverMessage.ParseFromString(str);
+		
+		if(serverMessage.option() == 1)
+		{
+			cout << "[" << serverMessage.broadcast().username() << "] " << serverMessage.broadcast().message() << endl;
+		}
+		else if(serverMessage.option() == 2)
+		{
+			cout << "[Mensaje directo de " <<  serverMessage.message().username() << "] " << serverMessage.message().message() << endl;
+		}
+		else if(serverMessage.option() == 5)
+		{
+			cout << "[USUARIOS CONECTADOS](" << serverMessage.connecteduserresponse().connectedusers_size() << ")" << endl;
+			for(int i = 0; i < serverMessage.connecteduserresponse().connectedusers_size(); i++)
+			{
+				string username_i = serverMessage.connecteduserresponse().connectedusers(i).username();
+				string ip_i = serverMessage.connecteduserresponse().connectedusers(i).ip();
+				string status_i = serverMessage.connecteduserresponse().connectedusers(i).status();
+				int userId_i = serverMessage.connecteduserresponse().connectedusers(i).userid();
+				cout << "[" << username_i << "](" << status_i << ")" << endl;
+			}
+		}
+		else
+		{
+			cout << "[UNKNOWN SERVER MESAGE][" << serverMessage.option() << "]" << endl;
+		}
+		
 	}
 	return NULL;
 }
@@ -69,17 +75,19 @@ int main(int argc, char const *argv[])
 { 
 	GOOGLE_PROTOBUF_VERIFY_VERSION;
 
-    char opcion;
-	char opcionstatus;
+	string opcion;
+	string opcionstatus;
+	string username;
+	string directmessage;
+	string tousername;
 	string usernameinfo;
 	
-	string username;
+	cin.clear();
   	cout << "Ingresa tu nombre de usuario: ";
-  	cin >> username;
+ 	getline(cin, username);
 		
 	
 	struct sockaddr_in serv_addr; 
-	char *hello = "Hello from client"; 
 	char buffer[1024] = {0}; 
 	if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) 
 	{ 
@@ -105,7 +113,7 @@ int main(int argc, char const *argv[])
 
 	//----------------START SYNCRONIZE INFO------------------------------------
 	MyInfoSynchronize * miInfo(new MyInfoSynchronize);
-	miInfo->set_username("username123");
+	miInfo->set_username(username);
 	miInfo->set_ip("127.0.0.1");
 	
 	ClientMessage m;
@@ -154,26 +162,15 @@ int main(int argc, char const *argv[])
 	pthread_t thread;
 	pthread_create(&thread, NULL, &listenServer, NULL);
 	
+	cout << "[Chat General]" << endl;
+
 	while(1)
 	{
+		string general_input;
+		cin.clear();
+		getline(cin, general_input);
 
-		int rc;
-		rc = getLine ("", write_buffer, sizeof(write_buffer));
-
-		if (rc == NO_INPUT)
-		{
-			// Extra NL since my system doesn't output that on EOF.
-			printf ("\nNo input\n");
-			return 1;
-		}
-
-		if (rc == TOO_LONG)
-		{
-			printf ("Input too long [%s]\n", write_buffer);
-			return 1;
-		}
-
-		if(strcmp(write_buffer, "/m") == 0)
+		if(general_input == "/m")
 		{
 			bool bandera = false;
 			do {
@@ -190,28 +187,25 @@ int main(int argc, char const *argv[])
 				cout << "\t7 .- Salir" << endl << endl;
 				cout << "Elije una opcion: ";
 
-				cin >> opcion;
+				getline(cin, opcion);
 			
-				if(opcion == '1')
+				if(opcion == "1")
 				{
 					system("clear");
-					cout << "Regresar al chat principal.\n";
+					cout << "[Chat General]" << endl;
 					bandera = true;
 				}
-				else if(opcion == '2')
+				else if(opcion == "2")
 				{
-					string tousername;
-					string directmessage;
-
 					system("clear");
+					cout << "\nEnviar mensajes directos" << endl;
+					cout << "-----------" << endl << endl;
+					cout << "Ingresa el nombre de usuario: ";
 					cin.clear();
-		    		cout << "Enviar mensajes directos" << endl;
-		    		cout << "-----------" << endl << endl;
-		    		cout << "Ingresa el nombre de usuario: ";
-		    		cin >> tousername;
-					cin.clear();
+					getline(cin, tousername);
 					cout << "Ingresa el mensaje: ";
-		    		cin >> directmessage;
+					cin.clear();
+					getline(cin, directmessage);
 
 					DirectMessageRequest *directMessageRequest(new DirectMessageRequest);
 					directMessageRequest->set_message(directmessage);
@@ -224,63 +218,123 @@ int main(int argc, char const *argv[])
 					string binary2;
 					cm.SerializeToString(&binary2);
 
-					char cstr2[binary.size() + 1];
-					strcpy(cstr2, binary.c_str());
+					char cstr2[binary2.size() + 1];
+					strcpy(cstr2, binary2.c_str());
 
 					send(sock , cstr2, strlen(cstr2) , 0 );				
 				}
-				else if(opcion == '3')
+				else if(opcion == "3")
 				{
-					system("clear");
-					cin.clear();
+					bool loop2 = true;
+					do
+					{
+						system("clear");
+						cin.clear();
 		    			cout << "Cambiar de status" << endl;
 		    			cout << "-----------" << endl << endl;
-		    			cout << "\t1 .- Activo" << endl;
-		    			cout << "\t2 .- Ocupado" << endl;
-		    			cout << "\t3 .- Inactivo" << endl << endl;
+		    			cout << "\t1 .- ACTIVO" << endl;
+		    			cout << "\t2 .- OCUPADO" << endl;
+		    			cout << "\t3 .- INACTIVO" << endl << endl;
 		    			cout << "Elije una opcion: ";
-		    			cin >> opcionstatus;
-					switch(opcionstatus) {
-						case '1':
-							cout << "Cambiar a estado ACTIVO\n";
-							break;
-						case '2':
-							cout << "Cambiar a estado OCUPADO\n";
-							break;
-						case '3':
-							cout << "Cambiar a estado INACTIVO\n";
-							break;
-						default:
+						getline(cin, opcionstatus);
+
+								
+						if (opcionstatus == "1" || opcionstatus == "2" || opcionstatus == "3") {
+							string new_status;
+							if (opcionstatus == "1")
+							{
+								new_status = "ACTIVO";
+							}
+							else if (opcionstatus == "2")
+							{
+								new_status = "OCUPADO";
+							}
+							else
+							{
+								new_status = "INACTIVO";
+							}
+							
+							cout << "Estado Cambiado a " << new_status << endl;
+
+							ChangeStatusRequest *changeStatusRequest(new ChangeStatusRequest);
+							changeStatusRequest->set_status(new_status);
+
+							ClientMessage cm;
+							cm.set_option(3);
+							cm.set_allocated_changestatus(changeStatusRequest);
+
+							string binary2;
+							cm.SerializeToString(&binary2);
+
+							char cstr2[binary2.size() + 1];
+							strcpy(cstr2, binary2.c_str());
+
+							send(sock , cstr2, strlen(cstr2) , 0 );	
+							loop2 = false;
+						}
+						else 
+						{
 							cout << "Opcion no valida.\a\n";
-							break;
-					}
+						}
+					} while(loop2);
 				}
-				else if(opcion == '4')
+				else if(opcion == "4")
 				{
 					system("clear");
 					cout << "Lista de usuarios conectados.\n";
+
+					connectedUserRequest *cUserRequest(new connectedUserRequest);
+					cUserRequest->set_userid(0);
+
+					ClientMessage cm;
+					cm.set_option(2);
+					cm.set_allocated_connectedusers(cUserRequest);
+
+					string binary2;
+					cm.SerializeToString(&binary2);
+
+					char cstr2[binary2.size() + 1];
+					strcpy(cstr2, binary2.c_str());
+
+					send(sock , cstr2, strlen(cstr2) , 0 );	
 				}
-				else if(opcion == '5')
+				else if(opcion == "5")
 				{
 					system("clear");
 					cin.clear();
 					cout << "Mostrar informacion de un usuario" << endl;
 					cout << "-----------" << endl << endl;
 					cout << "Ingresa el nombre de usuario: ";
-					cin >> usernameinfo;
+					getline(cin, usernameinfo);
+
+					connectedUserRequest *cUserRequest(new connectedUserRequest);
+					cUserRequest->set_userid(1);
+					cUserRequest->set_username(usernameinfo);
+
+					ClientMessage cm;
+					cm.set_option(2);
+					cm.set_allocated_connectedusers(cUserRequest);
+
+					string binary2;
+					cm.SerializeToString(&binary2);
+
+					char cstr2[binary2.size() + 1];
+					strcpy(cstr2, binary2.c_str());
+
+					send(sock , cstr2, strlen(cstr2) , 0 );	
 				}
-				else if(opcion == '6')
+				else if(opcion == "6")
 				{
 					system("clear");
 					cout << "Ayuda.\n";
 				}
-				else if(opcion == '7')
+				else if(opcion == "7")
 				{
 					bandera = true;
 					close(sock);
 					exit(1);
 				}
-				else if(opcion > '7')
+				else
 				{
 					system("clear");
 					cout << "Opcion no valida.\a\n";
@@ -290,8 +344,8 @@ int main(int argc, char const *argv[])
 		else
 		{
 			BroadcastRequest *broadcastRequest(new BroadcastRequest);
-			string str(write_buffer);
-			broadcastRequest->set_message(str);
+
+			broadcastRequest->set_message(general_input);
 
 			ClientMessage m;
 			m.set_option(4);

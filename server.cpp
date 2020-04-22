@@ -18,16 +18,14 @@ using namespace chat;
 
 int clients_sockets[MAX_CLIENTS] = {0};
 string clients_names[MAX_CLIENTS];
-int clients_status[MAX_CLIENTS];
+string clients_status[MAX_CLIENTS];
 
 void *listenClient(void *client_index_p_)
 {
-	char *hello = "Hello from server"; 
 	int *client_index_p = (int *) client_index_p_;
 	int client_index = *client_index_p;
 	int socket = clients_sockets[client_index];
 	int valread;
-	int i;
 	while(1){
 		char buffer[1024] = {0}; 
 		valread = read( socket , buffer, 1024); 
@@ -54,7 +52,7 @@ void *listenClient(void *client_index_p_)
 
 			cout << "Client: " << socket << " username: " << clients_names[client_index] << endl;
 
-			MyInfoResponse * miInfoResponse(new MyInfoResponse);
+			MyInfoResponse *miInfoResponse(new MyInfoResponse);
 			miInfoResponse->set_userid(socket);
 	
 			ServerMessage sm;
@@ -67,18 +65,88 @@ void *listenClient(void *client_index_p_)
 			char cstr[binary.size() + 1];
 			strcpy(cstr, binary.c_str());
 
-			send(socket , cstr, strlen(cstr) , 0 ); 
-			
+			send(socket , cstr, strlen(cstr) , 0 ); 	
+		}
+		else if(clientMessage.option() == 2)
+		{
+			ConnectedUserResponse *connectedUserResponse(new ConnectedUserResponse);
+			if(clientMessage.connectedusers().userid() == 0){
+				for(int i=0;i<MAX_CLIENTS;i++){
+					if(clients_sockets[i] != 0){
+						ConnectedUser *connectedUser = connectedUserResponse->add_connectedusers();
+						connectedUser->set_username(clients_names[i]);
+						connectedUser->set_status(clients_status[i]);
+						connectedUser->set_userid(clients_sockets[i]);
+						connectedUser->set_ip("192");
+					}
+				}
+			}
+			else
+			{
+				for(int i=0;i<MAX_CLIENTS;i++){
+					if(clients_sockets[i] != 0 && clients_names[i] == clientMessage.connectedusers().username()){
+						ConnectedUser *connectedUser = connectedUserResponse->add_connectedusers();
+						connectedUser->set_username(clients_names[i]);
+						connectedUser->set_status(clients_status[i]);
+						connectedUser->set_userid(clients_sockets[i]);
+						connectedUser->set_ip("192");
+						break;
+					}
+				}
+			}
+			ServerMessage sm;
+			sm.set_option(5);
+			sm.set_allocated_connecteduserresponse(connectedUserResponse);
+
+			string binary;
+			sm.SerializeToString(&binary);
+
+			char cstr[binary.size() + 1];
+			strcpy(cstr, binary.c_str());
+
+			send(socket , cstr, strlen(cstr) , 0 );
+		}
+		else if(clientMessage.option() == 3)
+		{
+			clients_status[client_index] = clientMessage.changestatus().status();
+			cout << "Client " << socket << " changed status to: " << clients_status[client_index] << endl;
+
+			ChangeStatusResponse *changeStatusResponse(new ChangeStatusResponse);
+			changeStatusResponse->set_userid(socket);
+			changeStatusResponse->set_status(clients_status[client_index]);
+	
+			ServerMessage sm;
+			sm.set_option(6);
+			sm.set_allocated_changestatusresponse(changeStatusResponse);
+
+			string binary;
+			sm.SerializeToString(&binary);
+
+			char cstr[binary.size() + 1];
+			strcpy(cstr, binary.c_str());
+
+			send(socket , cstr, strlen(cstr) , 0 ); 	
 		}
 		else if(clientMessage.option() == 4)
 		{
-			char cstr[clientMessage.broadcast().message().size() + 1];
-			strcpy(cstr, clientMessage.broadcast().message().c_str());
+			cout << "Client " << socket << " broadcasted: " << clientMessage.broadcast().message() << endl;
 			
-			printf("Client %d says: %s\n",socket,cstr); 
-		
+			BroadcastMessage *broadcastMessage(new BroadcastMessage);
+			broadcastMessage->set_message(clientMessage.broadcast().message());
+			broadcastMessage->set_userid(socket);
+			broadcastMessage->set_username(clients_names[client_index]);
+	
+			ServerMessage sm;
+			sm.set_option(1);
+			sm.set_allocated_broadcast(broadcastMessage);
 
-			for(i=0;i<MAX_CLIENTS;i++){
+			string binary;
+			sm.SerializeToString(&binary);
+
+			char cstr[binary.size() + 1];
+			strcpy(cstr, binary.c_str());	
+			
+			for(int i=0;i<MAX_CLIENTS;i++){
 				if(clients_sockets[i] != 0 && i != client_index){
 					send(clients_sockets[i] , cstr , strlen(cstr) , 0);
 				}
@@ -86,25 +154,39 @@ void *listenClient(void *client_index_p_)
 		}
 		else if(clientMessage.option() == 5)
 		{
-			char cstr[clientMessage.directmessage().message().size() + 1];
-			strcpy(cstr, clientMessage.directmessage().message().c_str());
+			cout << "Client " << socket << " sent direct message to " << clientMessage.directmessage().username() << endl;
+			
+			DirectMessage *directMessage(new DirectMessage);
+			directMessage->set_message(clientMessage.directmessage().message());
+			directMessage->set_userid(socket);
+			directMessage->set_username(clients_names[client_index]);
+	
+			ServerMessage sm;
+			sm.set_option(2);
+			sm.set_allocated_message(directMessage);
 
-			string toUsername = clientMessage.directmessage().username();
+			string binary;
+			sm.SerializeToString(&binary);
 
-			for(i=0;i<MAX_CLIENTS;i++){
-				if(clients_names[i] != "" && clients_names[i] == toUsername){
+			char cstr[binary.size() + 1];
+			strcpy(cstr, binary.c_str());	
+
+			for(int i=0;i<MAX_CLIENTS;i++){
+				if(clients_names[i] != "" && clients_names[i] == clientMessage.directmessage().username()){
 					send(clients_sockets[i] , cstr , strlen(cstr) , 0);
-
-					printf("Client %d says: %s to client %d\n",socket,cstr,clients_sockets[i]);
 					break;
 				}
 			}
+		}
+		else
+		{
+			cout << "[UNKNOWN CLIENT MESAGE][" << clientMessage.option() << "]" << endl;
 		}
 	}
 
 	clients_sockets[client_index] = 0;
 	clients_names[client_index] = "";
-	clients_status[client_index] = 0;
+	clients_status[client_index] = "";
 	close(socket);
 	free(client_index_p);
 	return NULL;
@@ -148,6 +230,8 @@ int main(int argc, char const *argv[])
 		exit(EXIT_FAILURE); 
 	}
 	
+	cout << "SERVER STARTED" << endl;
+	
 	while(1){
 
 		int new_socket;
@@ -157,17 +241,16 @@ int main(int argc, char const *argv[])
 			exit(EXIT_FAILURE); 
 		}
 		
-		
-		int i;
-		for(i=0;i<MAX_CLIENTS;i++){
+		int *index= (int *)malloc(sizeof(int));
+		for(int i=0;i<MAX_CLIENTS;i++){
 			if(clients_sockets[i] == 0){
 				clients_sockets[i] = new_socket;
+				clients_status[i] = "ACTIVE";
+				*index = i;
 				break;
 			}
 		}
 
-		int *index= (int *)malloc(sizeof(int));
-		*index = i;
 
 		printf("CLIENT %d CONECTED\n", new_socket);
 		pthread_t thread;
