@@ -162,133 +162,84 @@ int main(int argc, char const *argv[])
 	pthread_t thread;
 	pthread_create(&thread, NULL, &listenServer, NULL);
 	
-	cout << "[Chat General]" << endl;
+	cout << "\nMenu de opciones" << endl << endl;
+	cout << "-----------" << endl;
+	cout << "En cualquier momento, puedes ingresar los siguientes comandos segun lo que necesites" << endl << endl;
+	cout << "\tEnviar mensajes directos: /mensajedirecto <username> <mensaje>" << endl;
+	cout << "\tCambiar de status: /cambiarstatus <status>" << endl;
+	cout << "\tLista de usuarios conectados: /listado" << endl;
+	cout << "\tMostrar informacion de un usuario: /infousuario <username>" << endl;
+	cout << "\tAyuda: /ayuda" << endl;
+	cout << "\tSalir: /salir" << endl << endl << endl << endl << endl;
 
 	while(1)
 	{
-		string general_input;
+		string input;
 		cin.clear();
-		getline(cin, general_input);
+		getline(cin, input);
 
-		if(general_input == "/m")
+		string delimiter = " ";
+		string command = input.substr(0, input.find(delimiter));
+		
+		if(command == "/mensajedirecto")
 		{
-			bool bandera = false;
-			do {
-				system("clear");
-				cin.clear();
-				cout << "Menu principal" << endl;
-				cout << "-----------" << endl << endl;
-				cout << "\t1 .- Regresar al chat principal" << endl;
-				cout << "\t2 .- Enviar mensajes directos" << endl;
-				cout << "\t3 .- Cambiar de status" << endl;
-				cout << "\t4 .- Lista de usuarios conectados" << endl;
-				cout << "\t5 .- Mostrar informacion de un usuario" << endl;
-				cout << "\t6 .- Ayuda" << endl;
-				cout << "\t7 .- Salir" << endl << endl;
-				cout << "Elije una opcion: ";
+			string tokenmessage = input.substr(input.find(delimiter) + 1, input.length() - 1);
+			string directuser = tokenmessage.substr(0, tokenmessage.find(delimiter));
+			string directmessage = tokenmessage.substr(tokenmessage.find(delimiter) + 1, tokenmessage.length() - 1);
 
-				getline(cin, opcion);
+			system("clear");
+			cout << "\nEnviar mensajes directos" << endl;
+			cout << "-----------" << endl << endl;
+			cout << "Ingresa el nombre de usuario: ";
+			cin.clear();
+			getline(cin, tousername);
+			cout << "Ingresa el mensaje: ";
+			cin.clear();
+			getline(cin, directmessage);
+
+			DirectMessageRequest *directMessageRequest(new DirectMessageRequest);
+			directMessageRequest->set_message(directmessage);
+			directMessageRequest->set_username(tousername);
+
+			ClientMessage cm;
+			cm.set_option(5);
+			cm.set_allocated_directmessage(directMessageRequest);
+
+			string binary2;
+			cm.SerializeToString(&binary2);
+
+			char cstr2[binary2.size() + 1];
+			strcpy(cstr2, binary2.c_str());
+
+			send(sock , cstr2, strlen(cstr2) , 0 );				
+		}
+		else if(command == "/cambiarstatus")
+		{
+			string tokenstatus = input.substr(input.find(delimiter) + 1, input.length() - 1);
 			
-				if(opcion == "1")
-				{
-					system("clear");
-					cout << "[Chat General]" << endl;
-					bandera = true;
-				}
-				else if(opcion == "2")
-				{
-					system("clear");
-					cout << "\nEnviar mensajes directos" << endl;
-					cout << "-----------" << endl << endl;
-					cout << "Ingresa el nombre de usuario: ";
-					cin.clear();
-					getline(cin, tousername);
-					cout << "Ingresa el mensaje: ";
-					cin.clear();
-					getline(cin, directmessage);
-
-					DirectMessageRequest *directMessageRequest(new DirectMessageRequest);
-					directMessageRequest->set_message(directmessage);
-					directMessageRequest->set_username(tousername);
-
-					ClientMessage cm;
-					cm.set_option(5);
-					cm.set_allocated_directmessage(directMessageRequest);
-
-					string binary2;
-					cm.SerializeToString(&binary2);
-
-					char cstr2[binary2.size() + 1];
-					strcpy(cstr2, binary2.c_str());
-
-					send(sock , cstr2, strlen(cstr2) , 0 );				
-				}
-				else if(opcion == "3")
-				{
-					bool loop2 = true;
-					do
+			if (tokenstatus == "1" || tokenstatus == "2" || tokenstatus == "3") {
+					string new_status;
+					if (tokenstatus == "1")
 					{
-						system("clear");
-						cin.clear();
-		    			cout << "Cambiar de status" << endl;
-		    			cout << "-----------" << endl << endl;
-		    			cout << "\t1 .- ACTIVO" << endl;
-		    			cout << "\t2 .- OCUPADO" << endl;
-		    			cout << "\t3 .- INACTIVO" << endl << endl;
-		    			cout << "Elije una opcion: ";
-						getline(cin, opcionstatus);
+						new_status = "ACTIVO";
+					}
+					else if (tokenstatus == "2")
+					{
+						new_status = "OCUPADO";
+					}
+					else
+					{
+						new_status = "INACTIVO";
+					}
+					
+					cout << "Estado Cambiado a " << new_status << endl;
 
-								
-						if (opcionstatus == "1" || opcionstatus == "2" || opcionstatus == "3") {
-							string new_status;
-							if (opcionstatus == "1")
-							{
-								new_status = "ACTIVO";
-							}
-							else if (opcionstatus == "2")
-							{
-								new_status = "OCUPADO";
-							}
-							else
-							{
-								new_status = "INACTIVO";
-							}
-							
-							cout << "Estado Cambiado a " << new_status << endl;
-
-							ChangeStatusRequest *changeStatusRequest(new ChangeStatusRequest);
-							changeStatusRequest->set_status(new_status);
-
-							ClientMessage cm;
-							cm.set_option(3);
-							cm.set_allocated_changestatus(changeStatusRequest);
-
-							string binary2;
-							cm.SerializeToString(&binary2);
-
-							char cstr2[binary2.size() + 1];
-							strcpy(cstr2, binary2.c_str());
-
-							send(sock , cstr2, strlen(cstr2) , 0 );	
-							loop2 = false;
-						}
-						else 
-						{
-							cout << "Opcion no valida.\a\n";
-						}
-					} while(loop2);
-				}
-				else if(opcion == "4")
-				{
-					system("clear");
-					cout << "Lista de usuarios conectados.\n";
-
-					connectedUserRequest *cUserRequest(new connectedUserRequest);
-					cUserRequest->set_userid(0);
+					ChangeStatusRequest *changeStatusRequest(new ChangeStatusRequest);
+					changeStatusRequest->set_status(new_status);
 
 					ClientMessage cm;
-					cm.set_option(2);
-					cm.set_allocated_connectedusers(cUserRequest);
+					cm.set_option(3);
+					cm.set_allocated_changestatus(changeStatusRequest);
 
 					string binary2;
 					cm.SerializeToString(&binary2);
@@ -298,54 +249,75 @@ int main(int argc, char const *argv[])
 
 					send(sock , cstr2, strlen(cstr2) , 0 );	
 				}
-				else if(opcion == "5")
+				else 
 				{
-					system("clear");
-					cin.clear();
-					cout << "Mostrar informacion de un usuario" << endl;
-					cout << "-----------" << endl << endl;
-					cout << "Ingresa el nombre de usuario: ";
-					getline(cin, usernameinfo);
-
-					connectedUserRequest *cUserRequest(new connectedUserRequest);
-					cUserRequest->set_userid(1);
-					cUserRequest->set_username(usernameinfo);
-
-					ClientMessage cm;
-					cm.set_option(2);
-					cm.set_allocated_connectedusers(cUserRequest);
-
-					string binary2;
-					cm.SerializeToString(&binary2);
-
-					char cstr2[binary2.size() + 1];
-					strcpy(cstr2, binary2.c_str());
-
-					send(sock , cstr2, strlen(cstr2) , 0 );	
-				}
-				else if(opcion == "6")
-				{
-					system("clear");
-					cout << "Ayuda.\n";
-				}
-				else if(opcion == "7")
-				{
-					bandera = true;
-					close(sock);
-					exit(1);
-				}
-				else
-				{
-					system("clear");
 					cout << "Opcion no valida.\a\n";
 				}
-			} while(bandera != true);
+		}
+		else if(command == "/listado")
+		{
+			connectedUserRequest *cUserRequest(new connectedUserRequest);
+			cUserRequest->set_userid(0);
+
+			ClientMessage cm;
+			cm.set_option(2);
+			cm.set_allocated_connectedusers(cUserRequest);
+
+			string binary2;
+			cm.SerializeToString(&binary2);
+
+			char cstr2[binary2.size() + 1];
+			strcpy(cstr2, binary2.c_str());
+
+			send(sock , cstr2, strlen(cstr2) , 0 );	
+		}
+		else if(command == "/infousuario")
+		{
+			system("clear");
+			cin.clear();
+			cout << "Mostrar informacion de un usuario" << endl;
+			cout << "-----------" << endl << endl;
+			cout << "Ingresa el nombre de usuario: ";
+			getline(cin, usernameinfo);
+
+			connectedUserRequest *cUserRequest(new connectedUserRequest);
+			cUserRequest->set_userid(1);
+			cUserRequest->set_username(usernameinfo);
+
+			ClientMessage cm;
+			cm.set_option(2);
+			cm.set_allocated_connectedusers(cUserRequest);
+
+			string binary2;
+			cm.SerializeToString(&binary2);
+
+			char cstr2[binary2.size() + 1];
+			strcpy(cstr2, binary2.c_str());
+
+			send(sock , cstr2, strlen(cstr2) , 0 );	
+		}
+		else if(command == "/ayuda")
+		{
+			cout << "\nMenu de opciones" << endl << endl;
+			cout << "-----------" << endl;
+			cout << "En cualquier momento, puedes ingresar los siguientes comandos segun lo que necesites" << endl << endl;
+			cout << "\tEnviar mensajes directos: /mensajedirecto <username> <mensaje>" << endl;
+			cout << "\tCambiar de status: /cambiarstatus <status>" << endl;
+			cout << "\tLista de usuarios conectados: /listado" << endl;
+			cout << "\tMostrar informacion de un usuario: /infousuario <username>" << endl;
+			cout << "\tAyuda: /ayuda" << endl;
+			cout << "\tSalir: /salir" << endl << endl << endl << endl << endl;
+		}
+		else if(command == "/salir")
+		{
+			close(sock);
+			exit(1);
 		}
 		else
 		{
 			BroadcastRequest *broadcastRequest(new BroadcastRequest);
 
-			broadcastRequest->set_message(general_input);
+			broadcastRequest->set_message(input);
 
 			ClientMessage m;
 			m.set_option(4);

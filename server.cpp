@@ -30,7 +30,7 @@ void *listenClient(void *client_index_p_)
 		char buffer[1024] = {0}; 
 		valread = read( socket , buffer, 1024); 
 
-		if(strcmp(buffer, "x") == 0 || valread == 0)
+		if(valread == 0)
 		{
 			printf("CLIENT %d DISCONECTED\n", socket);
 			break;
@@ -172,7 +172,7 @@ void *listenClient(void *client_index_p_)
 			strcpy(cstr, binary.c_str());	
 
 			for(int i=0;i<MAX_CLIENTS;i++){
-				if(clients_names[i] != "" && clients_names[i] == clientMessage.directmessage().username()){
+				if(clients_sockets[i] != 0 && clients_names[i] == clientMessage.directmessage().username()){
 					send(clients_sockets[i] , cstr , strlen(cstr) , 0);
 					break;
 				}
@@ -245,7 +245,8 @@ int main(int argc, char const *argv[])
 		for(int i=0;i<MAX_CLIENTS;i++){
 			if(clients_sockets[i] == 0){
 				clients_sockets[i] = new_socket;
-				clients_status[i] = "ACTIVE";
+				clients_names[i] = "Anonimo";
+				clients_status[i] = "ACTIVO";
 				*index = i;
 				break;
 			}
