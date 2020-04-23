@@ -216,6 +216,9 @@ int main(int argc, char* argv[])
 	}
 
 	// ---------------- Inicia sincronizacion con el server (3 WAY HANDSHAKE) -------------------------
+
+	cout << "Inicio de proceso de handshake" << endl;
+
 	MyInfoSynchronize * miInfo(new MyInfoSynchronize);
 	miInfo->set_username(username);
 	miInfo->set_ip("127.0.0.1");
@@ -269,7 +272,7 @@ int main(int argc, char* argv[])
 	}
 	else
 	{
-		cout << "Error en la conexion" << endl;
+		cout << "Error en el proceso de handshake" << endl;
 		cout << "Por favor reinicie el programa" << endl;
 		close(sock);
 		exit(1);
