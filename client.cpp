@@ -302,7 +302,7 @@ int main(int argc, char* argv[])
 	cout << "-----------" << endl;
 	cout << "En cualquier momento, puedes ingresar los siguientes comandos segun lo que necesites" << endl << endl;
 	cout << "\tEnviar mensajes directos: /mensajedirecto <username> \"<mensaje>\"" << endl;
-	cout << "\tCambiar de status: /cambiarstatus <status>" << endl;
+	cout << "\tCambiar de status: /cambiarstatus <status> (ACTIVO, OCUPADO o INACTIVO)" << endl;
 	cout << "\tLista de usuarios conectados: /listado" << endl;
 	cout << "\tMostrar informacion de un usuario: /infousuario <username>" << endl;
 	cout << "\tAyuda: /ayuda" << endl;
@@ -453,7 +453,7 @@ int main(int argc, char* argv[])
 			cout << "-----------" << endl;
 			cout << "En cualquier momento, puedes ingresar los siguientes comandos segun lo que necesites" << endl << endl;
 			cout << "\tEnviar mensajes directos: /mensajedirecto <username> \"<mensaje>\"" << endl;
-			cout << "\tCambiar de status: /cambiarstatus <status>" << endl;
+			cout << "\tCambiar de status: /cambiarstatus <status> (ACTIVO, OCUPADO o INACTIVO)" << endl;
 			cout << "\tLista de usuarios conectados: /listado" << endl;
 			cout << "\tMostrar informacion de un usuario: /infousuario <username>" << endl;
 			cout << "\tAyuda: /ayuda" << endl;
