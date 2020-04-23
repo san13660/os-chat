@@ -14,7 +14,7 @@ Ejemplo: ./client chris123 127.0.0.1 8080
 ### ------------------------------------------------------------------------------------------
 #### Para compilar el servidor
 g++ server.cpp mensaje.pb.cc -lprotobuf -lpthread -std=c++11 -o server
-### Para ejecutar el servidor
+#### Para ejecutar el servidor
 <nombredelservidor> <puertodelservidor>
 Ejemplo: ./server 8080
  
