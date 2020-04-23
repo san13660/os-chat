@@ -19,4 +19,4 @@ g++ server.cpp mensaje.pb.cc -lprotobuf -lpthread -std=c++11 -o server
 Ejemplo: ./server 8080
  
 ### ------------------------------------------------------------------------------------------
-Despues de ingresar como cliente, se desplegara un menu con los comandos disponibles. A partir de aqui ya se puede comenzar a escribir en el chat.
+Después de ingresar como cliente, se desplegaré un menú con los comandos disponibles. A partir de aquí ya se puede comenzar a escribir en el chat.
