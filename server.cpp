@@ -27,6 +27,7 @@ using namespace chat;
 int clients_sockets[MAX_CLIENTS] = {0};
 string clients_names[MAX_CLIENTS];
 string clients_status[MAX_CLIENTS];
+string clients_ips[MAX_CLIENTS];
 
 // Funcion para mantenerse escuchando cualquier solicitud del parte del cliente
 void *listenClient(void *client_index_p_)
@@ -85,8 +86,10 @@ void *listenClient(void *client_index_p_)
 		else if(clientMessage.option() == 2)
 		{
 			ConnectedUserResponse *connectedUserResponse(new ConnectedUserResponse);
+			bool found = false;
 			// Lista completa
 			if(clientMessage.connectedusers().userid() == 0){
+				found = true;
 				for(int i=0;i<MAX_CLIENTS;i++){
 					if(clients_sockets[i] != 0){
 						ConnectedUser *connectedUser = connectedUserResponse->add_connectedusers();
@@ -107,21 +110,44 @@ void *listenClient(void *client_index_p_)
 						connectedUser->set_status(clients_status[i]);
 						connectedUser->set_userid(clients_sockets[i]);
 						connectedUser->set_ip("192");
+						found = true;
 						break;
 					}
 				}
 			}
-			ServerMessage sm;
-			sm.set_option(5);
-			sm.set_allocated_connecteduserresponse(connectedUserResponse);
 
-			string binary;
-			sm.SerializeToString(&binary);
+			if(found)
+			{
+				// ENVIO DE CONFIRMACION
+				ServerMessage sm;
+				sm.set_option(5);
+				sm.set_allocated_connecteduserresponse(connectedUserResponse);
 
-			char cstr[binary.size() + 1];
-			strcpy(cstr, binary.c_str());
+				string binary;
+				sm.SerializeToString(&binary);
 
-			send(socket , cstr, strlen(cstr) , 0 );
+				char cstr[binary.size() + 1];
+				strcpy(cstr, binary.c_str());
+
+				send(socket , cstr, strlen(cstr) , 0 );
+			}
+			else
+			{
+				// ENVIO DE ERROR
+				ErrorResponse *errorResponse(new ErrorResponse);
+				errorResponse->set_errormessage("USUARIO NO ENCONTRADO");
+	
+				ServerMessage sm;
+				sm.set_option(3);
+				sm.set_allocated_error(errorResponse);
+
+				string binary;
+				sm.SerializeToString(&binary);
+
+				char cstr[binary.size() + 1];
+				strcpy(cstr, binary.c_str());
+				send(socket , cstr, strlen(cstr) , 0 );
+			}
 		}
 		
 		// Opcion para cambiar el estado de un cliente
@@ -172,6 +198,22 @@ void *listenClient(void *client_index_p_)
 					send(clients_sockets[i] , cstr , strlen(cstr) , 0);
 				}
 			}
+			
+			// ENVIO DE CONFIRMACION
+			BroadcastResponse *broadcastResponse(new BroadcastResponse);
+			broadcastResponse->set_messagestatus("MENSAJE BROADCAST ENVIADO");
+	
+			ServerMessage sm2;
+			sm2.set_option(7);
+			sm2.set_allocated_broadcastresponse(broadcastResponse);
+
+			string binary2;
+			sm2.SerializeToString(&binary2);
+
+			char cstr2[binary.size() + 1];
+			strcpy(cstr2, binary2.c_str());
+			send(socket , cstr2, strlen(cstr2) , 0 ); 
+			
 		}
 		
 		// Opcion de mensaje directo
@@ -194,12 +236,57 @@ void *listenClient(void *client_index_p_)
 			char cstr[binary.size() + 1];
 			strcpy(cstr, binary.c_str());	
 
+			bool found = false;
+
 			for(int i=0;i<MAX_CLIENTS;i++){
 				if(clients_sockets[i] != 0 && clients_names[i] == clientMessage.directmessage().username()){
 					send(clients_sockets[i] , cstr , strlen(cstr) , 0);
+					found = true;
 					break;
 				}
 			}
+			
+
+			if(found)
+			{
+				// ENVIO DE CONFIRMACION
+				DirectMessageResponse *directMessageResponse(new DirectMessageResponse);
+				directMessageResponse->set_messagestatus("MENSAJE DIRECTO ENVIADO");
+	
+				ServerMessage sm2;
+				sm2.set_option(8);
+				sm2.set_allocated_directmessageresponse(directMessageResponse);
+
+				string binary2;
+				sm2.SerializeToString(&binary2);
+
+				char cstr2[binary2.size() + 1];
+				strcpy(cstr2, binary2.c_str());
+				send(socket , cstr2, strlen(cstr2) , 0 );
+			}
+			else
+			{
+				// ENVIO DE ERROR
+				ErrorResponse *errorResponse(new ErrorResponse);
+				errorResponse->set_errormessage("USUARIO NO ENCONTRADO");
+	
+				ServerMessage sm2;
+				sm2.set_option(3);
+				sm2.set_allocated_error(errorResponse);
+
+				string binary2;
+				sm2.SerializeToString(&binary2);
+
+				char cstr2[binary.size() + 1];
+				strcpy(cstr2, binary2.c_str());
+				send(socket , cstr2, strlen(cstr2) , 0 );
+			}
+		}
+		
+		// Opcion de mensaje directo
+		else if(clientMessage.option() == 6)
+		{
+			// FIN DE HANDSHAKE
 		}
 		// Si no es otra opcion
 		else

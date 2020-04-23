@@ -22,13 +22,12 @@
 using namespace std;
 using namespace chat;
 
-// Constantes
-#define PORT 8080
-#define OK       0
-#define NO_INPUT 1
-#define TOO_LONG 2
-
 int sock = 0;
+string ipServer = "";
+int portServer = 0;
+
+int userIDs[99] = {0};
+string usernames[99] = {""};
 
 // El cliente se queda escuchando lo que provenga del servidor
 void *listenServer(void *arg)
@@ -63,12 +62,26 @@ void *listenServer(void *arg)
 		{
 			cout << "[MENSAJE DIRECTO DE " <<  serverMessage.message().username() << "] " << serverMessage.message().message() << endl;
 		}
+		// Confirmacion al cambiar status
+		else if(serverMessage.option() == 3)
+		{
+			cout << "[ERROR] " << serverMessage.error().errormessage() << endl;
+		}
+		// Confirmacion al cambiar status
+		else if(serverMessage.option() == 4)
+		{
+			cout << "[CONFIRMACION DE SYNC]" << endl;
+		}
 		// Lista de usuarios conectados, solicitada por el cliente
 		else if(serverMessage.option() == 5)
 		{
 			cout << "[USUARIOS CONECTADOS](" << serverMessage.connecteduserresponse().connectedusers_size() << ")" << endl;
 			for(int i = 0; i < serverMessage.connecteduserresponse().connectedusers_size(); i++)
 			{
+				fill_n(userIDs, userIDs, 0);
+				userIDs[i] = serverMessage.connecteduserresponse().connectedusers(i).userid();
+				usernames[i] = serverMessage.connecteduserresponse().connectedusers(i).username();
+
 				string username_i = serverMessage.connecteduserresponse().connectedusers(i).username();
 				string ip_i = serverMessage.connecteduserresponse().connectedusers(i).ip();
 				string status_i = serverMessage.connecteduserresponse().connectedusers(i).status();
@@ -77,9 +90,23 @@ void *listenServer(void *arg)
 			}
 		}
 		// Confirmacion al cambiar status
+		else if(serverMessage.option() == 6)
+		{
+			cout << "[CONFIRMACION CAMBIO DE STATUS]" << endl;
+		}
+		// Confirmacion al cambiar status
+		else if(serverMessage.option() == 7)
+		{
+			cout << "[CONFIRMACION DE ENVIO BROADCAST]" << endl;
+		}
+		// Confirmacion al cambiar status
+		else if(serverMessage.option() == 8)
+		{
+			cout << "[CONFIRMACION DE ENVIO DIRECTO]" << endl;
+		}
 		else
 		{
-			cout << "[CAMBIO DE STATUS][" << serverMessage.option() << "]" << endl;
+			cout << "[SABER][" << serverMessage.option() << "]" << endl;
 		}
 		
 	}
@@ -87,7 +114,7 @@ void *listenServer(void *arg)
 }
 
 // main
-int main(int argc, char const *argv[]) 
+int main(int argc, char* argv[]) 
 { 
 	GOOGLE_PROTOBUF_VERIFY_VERSION;
 	
@@ -100,9 +127,12 @@ int main(int argc, char const *argv[])
 	string usernameinfo;
 	
 	// Siempre antes de ingresar y establecer conexion, se pide el usuario al cliente
-	cin.clear();
-  	cout << "Ingresa tu nombre de usuario: ";
- 	getline(cin, username);
+	username = argv[1];
+	stringstream ssPort(argv[3]);
+	ssPort >> portServer; 
+	ipServer = argv[2];
+
+	cout << "IP: " << ipServer << endl;
 	
 	// Establecer conexion con el server, se le asigna un socket
 	struct sockaddr_in serv_addr; 
@@ -116,9 +146,9 @@ int main(int argc, char const *argv[])
 	} 
 
 	serv_addr.sin_family = AF_INET; 
-	serv_addr.sin_port = htons(PORT); 
+	serv_addr.sin_port = htons(portServer); 
 	 
-	if(inet_pton(AF_INET, "127.0.0.1", &serv_addr.sin_addr)<=0) 
+	if(inet_pton(AF_INET, ipServer.c_str(), &serv_addr.sin_addr)<=0) 
 	{ 
 		printf("\nInvalid address/ Address not supported \n"); 
 		return -1; 
@@ -164,7 +194,7 @@ int main(int argc, char const *argv[])
 		myInfoAcknowledge->set_userid(serverMessage.myinforesponse().userid());
 	
 		ClientMessage cm2;
-		cm2.set_option(8);
+		cm2.set_option(6);
 		cm2.set_allocated_acknowledge(myInfoAcknowledge);
 
 		string binary;
@@ -212,7 +242,7 @@ int main(int argc, char const *argv[])
 
 			DirectMessageRequest *directMessageRequest(new DirectMessageRequest);
 			directMessageRequest->set_message(directmessage);
-			directMessageRequest->set_username(tousername);
+			directMessageRequest->set_username(directuser);
 
 			ClientMessage cm;
 			cm.set_option(5);
@@ -230,37 +260,24 @@ int main(int argc, char const *argv[])
 		// Comando de cambiar status
 		else if(command == "/cambiarstatus")
 		{
-			string tokenstatus = input.substr(input.find(delimiter) + 1, input.length() - 1);
-			if (tokenstatus == "1" || tokenstatus == "2" || tokenstatus == "3") {
-					string new_status;
-					if (tokenstatus == "1")
-					{
-						new_status = "ACTIVO";
-					}
-					else if (tokenstatus == "2")
-					{
-						new_status = "OCUPADO";
-					}
-					else
-					{
-						new_status = "INACTIVO";
-					}
-					cout << "ESTADO CAMBIADO A " << new_status << endl;
+			string new_status = input.substr(input.find(delimiter) + 1, input.length() - 1);
+			if (new_status == "ACTIVO" || new_status == "OCUPADO" || new_status == "INACTIVO") {
+				cout << "ESTADO CAMBIADO A " << new_status << endl;
 
-					ChangeStatusRequest *changeStatusRequest(new ChangeStatusRequest);
-					changeStatusRequest->set_status(new_status);
+				ChangeStatusRequest *changeStatusRequest(new ChangeStatusRequest);
+				changeStatusRequest->set_status(new_status);
 
-					ClientMessage cm;
-					cm.set_option(3);
-					cm.set_allocated_changestatus(changeStatusRequest);
+				ClientMessage cm;
+				cm.set_option(3);
+				cm.set_allocated_changestatus(changeStatusRequest);
 
-					string binary2;
-					cm.SerializeToString(&binary2);
+				string binary2;
+				cm.SerializeToString(&binary2);
 
-					char cstr2[binary2.size() + 1];
-					strcpy(cstr2, binary2.c_str());
+				char cstr2[binary2.size() + 1];
+				strcpy(cstr2, binary2.c_str());
 
-					send(sock , cstr2, strlen(cstr2) , 0 );	
+				send(sock , cstr2, strlen(cstr2) , 0 );	
 			}
 			else 
 			{
