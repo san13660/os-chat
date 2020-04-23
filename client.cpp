@@ -23,11 +23,15 @@ using namespace std;
 using namespace chat;
 
 int sock = 0;
-string ipServer = "";
-int portServer = 0;
+string ip_server = "";
+int port_server = 0;
 
-int userIDs[99] = {0};
-string usernames[99] = {""};
+#define MAX_USERS 99
+
+int users_ids[MAX_USERS] = {0};
+string usernames[MAX_USERS] = {""};
+
+bool show_user_list = false;
 
 // El cliente se queda escuchando lo que provenga del servidor
 void *listenServer(void *arg)
@@ -41,8 +45,6 @@ void *listenServer(void *arg)
 		// Salir del programa si hay error de conexion
 		if(valread == 0)
 		{
-			cout << "SE PERDIO LA CONEXION AL SERVIDOR" << endl;
-			exit(1);
 			break;
 		}
 		
@@ -55,12 +57,50 @@ void *listenServer(void *arg)
 		// Broadcast del chat general
 		if(serverMessage.option() == 1)
 		{
-			cout << "[" << serverMessage.broadcast().username() << "] " << serverMessage.broadcast().message() << endl;
+			string usrn = "";
+			if(serverMessage.broadcast().has_username())
+			{
+				usrn = serverMessage.broadcast().username();
+			}
+			else
+			{
+				for(int i=0; i<MAX_USERS; i++)
+				{
+					if(users_ids[i] == serverMessage.broadcast().userid())
+					{
+						usrn = usernames[i];
+						break;
+					}
+				}
+			}
+			cout << "[" << usrn << "] " << serverMessage.broadcast().message() << endl;
 		}
 		// Mensaje directo de otro usuario
 		else if(serverMessage.option() == 2)
 		{
-			cout << "[MENSAJE DIRECTO DE " <<  serverMessage.message().username() << "] " << serverMessage.message().message() << endl;
+			string usrn = "";
+			if(serverMessage.message().has_username())
+			{
+				usrn = serverMessage.message().username();
+			}
+			else
+			{
+				for(int i=0; i<MAX_USERS; i++)
+				{
+					if(users_ids[i] == 0)
+					{
+						break;
+					}
+					if(users_ids[i] == serverMessage.message().userid())
+					{
+						usrn = usernames[i];
+						break;
+					}
+					
+				}
+			}
+			
+			cout << "[MENSAJE DIRECTO DE " <<  usrn << "] " << serverMessage.message().message() << endl;
 		}
 		// Confirmacion al cambiar status
 		else if(serverMessage.option() == 3)
@@ -70,46 +110,63 @@ void *listenServer(void *arg)
 		// Confirmacion al cambiar status
 		else if(serverMessage.option() == 4)
 		{
-			cout << "[CONFIRMACION DE SYNC]" << endl;
+			//cout << "[CONFIRMACION DE SYNC]" << endl;
 		}
 		// Lista de usuarios conectados, solicitada por el cliente
 		else if(serverMessage.option() == 5)
 		{
-			cout << "[USUARIOS CONECTADOS](" << serverMessage.connecteduserresponse().connectedusers_size() << ")" << endl;
+			fill_n(users_ids, MAX_USERS, 0);
+			fill_n(usernames, MAX_USERS, "");
+			cout << "[ INFO ]" << endl;
 			for(int i = 0; i < serverMessage.connecteduserresponse().connectedusers_size(); i++)
 			{
-				fill_n(userIDs, userIDs, 0);
-				userIDs[i] = serverMessage.connecteduserresponse().connectedusers(i).userid();
 				usernames[i] = serverMessage.connecteduserresponse().connectedusers(i).username();
-
 				string username_i = serverMessage.connecteduserresponse().connectedusers(i).username();
-				string ip_i = serverMessage.connecteduserresponse().connectedusers(i).ip();
-				string status_i = serverMessage.connecteduserresponse().connectedusers(i).status();
-				int userId_i = serverMessage.connecteduserresponse().connectedusers(i).userid();
-				cout << "[" << username_i << "](" << status_i << ")" << endl;
+
+				string ip_i = "DESCONOCIDO";
+				if(serverMessage.connecteduserresponse().connectedusers(i).has_ip())
+				{
+					ip_i = serverMessage.connecteduserresponse().connectedusers(i).ip();
+				}
+				string status_i = "DESCONOCIDO";
+				if(serverMessage.connecteduserresponse().connectedusers(i).has_status())
+				{
+					status_i = serverMessage.connecteduserresponse().connectedusers(i).status();
+				}
+				int user_id_i = -1;
+				if(serverMessage.connecteduserresponse().connectedusers(i).has_userid())
+				{
+					users_ids[i] = serverMessage.connecteduserresponse().connectedusers(i).userid();
+					user_id_i = serverMessage.connecteduserresponse().connectedusers(i).userid();
+				}
+				cout << "[ " << username_i << " | ID:" << user_id_i << " | " << status_i << " ]" << endl;
 			}
 		}
 		// Confirmacion al cambiar status
 		else if(serverMessage.option() == 6)
 		{
-			cout << "[CONFIRMACION CAMBIO DE STATUS]" << endl;
+			//cout << "[CONFIRMACION CAMBIO DE STATUS]" << endl;
 		}
 		// Confirmacion al cambiar status
 		else if(serverMessage.option() == 7)
 		{
-			cout << "[CONFIRMACION DE ENVIO BROADCAST]" << endl;
+			//cout << "[CONFIRMACION DE ENVIO BROADCAST]" << endl;
 		}
 		// Confirmacion al cambiar status
 		else if(serverMessage.option() == 8)
 		{
-			cout << "[CONFIRMACION DE ENVIO DIRECTO]" << endl;
+			//cout << "[CONFIRMACION DE ENVIO DIRECTO]" << endl;
 		}
 		else
 		{
-			cout << "[SABER][" << serverMessage.option() << "]" << endl;
+			//cout << "[MENSAJE DESCONOCIDO][" << serverMessage.option() << "]" << endl;
 		}
 		
 	}
+
+	cout << "SE PERDIO LA CONEXION AL SERVIDOR" << endl;
+	close(sock);
+	exit(1);
 	return NULL;
 }
 
@@ -129,10 +186,8 @@ int main(int argc, char* argv[])
 	// Siempre antes de ingresar y establecer conexion, se pide el usuario al cliente
 	username = argv[1];
 	stringstream ssPort(argv[3]);
-	ssPort >> portServer; 
-	ipServer = argv[2];
-
-	cout << "IP: " << ipServer << endl;
+	ssPort >> port_server; 
+	ip_server = argv[2];
 	
 	// Establecer conexion con el server, se le asigna un socket
 	struct sockaddr_in serv_addr; 
@@ -146,9 +201,9 @@ int main(int argc, char* argv[])
 	} 
 
 	serv_addr.sin_family = AF_INET; 
-	serv_addr.sin_port = htons(portServer); 
+	serv_addr.sin_port = htons(port_server); 
 	 
-	if(inet_pton(AF_INET, ipServer.c_str(), &serv_addr.sin_addr)<=0) 
+	if(inet_pton(AF_INET, ip_server.c_str(), &serv_addr.sin_addr)<=0) 
 	{ 
 		printf("\nInvalid address/ Address not supported \n"); 
 		return -1; 
@@ -156,7 +211,7 @@ int main(int argc, char* argv[])
 
 	if (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) 
 	{ 
-		printf("\nConnection Failed \n"); 
+		printf("\nFALLO CONEXION CON EL SERVIDOR \n"); 
 		return -1; 
 	}
 
@@ -205,17 +260,48 @@ int main(int argc, char* argv[])
 
 		send(sock , cstr, strlen(cstr) , 0 );
 	}
+	else if(serverMessage.option() == 3)
+	{
+		cout << "[ERROR] " << serverMessage.error().errormessage() << endl;
+		cout << "Por favor reinicie el programa" << endl;
+		close(sock);
+		exit(1);
+	}
+	else
+	{
+		cout << "Error en la conexion" << endl;
+		cout << "Por favor reinicie el programa" << endl;
+		close(sock);
+		exit(1);
+	}
+		
 
 	// ---------------- Finaliza sincronizacion y comienza el programa del chat --------------------
 	
 	pthread_t thread;
 	pthread_create(&thread, NULL, &listenServer, NULL);
+
+	//Obtener Lista
+	connectedUserRequest *cUserRequest(new connectedUserRequest);
+	cUserRequest->set_userid(0);
+
+	ClientMessage cm;
+	cm.set_option(2);
+	cm.set_allocated_connectedusers(cUserRequest);
+
+	string binary2;
+	cm.SerializeToString(&binary2);
+
+	char cstr2[binary2.size() + 1];
+	strcpy(cstr2, binary2.c_str());
+
+	send(sock , cstr2, strlen(cstr2) , 0 );	
 	
 	// Menu de opciones e intrucciones de los comandos
 	cout << "\nMenu de opciones" << endl << endl;
 	cout << "-----------" << endl;
 	cout << "En cualquier momento, puedes ingresar los siguientes comandos segun lo que necesites" << endl << endl;
-	cout << "\tEnviar mensajes directos: /mensajedirecto <username> <mensaje>" << endl;
+	cout << "\tEnviar mensajes directos: /mensajedirecto <username> \"<mensaje>\"" << endl;
 	cout << "\tCambiar de status: /cambiarstatus <status>" << endl;
 	cout << "\tLista de usuarios conectados: /listado" << endl;
 	cout << "\tMostrar informacion de un usuario: /infousuario <username>" << endl;
@@ -231,18 +317,33 @@ int main(int argc, char* argv[])
 		
 		// Separar y determinar si se comenzo con un comando especial
 		string delimiter = " ";
+		string delimiter2 = "\"";
 		string command = input.substr(0, input.find(delimiter));
 		
 		// Comando de mensaje directo
 		if(command == "/mensajedirecto")
 		{
 			string tokenmessage = input.substr(input.find(delimiter) + 1, input.length() - 1);
-			string directuser = tokenmessage.substr(0, tokenmessage.find(delimiter));
-			string directmessage = tokenmessage.substr(tokenmessage.find(delimiter) + 1, tokenmessage.length() - 1);
+			string directuser = tokenmessage.substr(0, tokenmessage.find(delimiter2) - 1);
+			string directmessage = tokenmessage.substr(tokenmessage.find(delimiter2) + 1, tokenmessage.length() - 1);
+			directmessage = directmessage.substr(0, directmessage.find(delimiter2));
 
 			DirectMessageRequest *directMessageRequest(new DirectMessageRequest);
 			directMessageRequest->set_message(directmessage);
 			directMessageRequest->set_username(directuser);
+
+			for(int i=0; i<MAX_USERS; i++)
+			{
+				if(usernames[i] == "")
+				{
+					break;
+				}
+				if(usernames[i] == directuser)
+				{
+					directMessageRequest->set_userid(users_ids[i]);
+					break;
+				}
+			}
 
 			ClientMessage cm;
 			cm.set_option(5);
@@ -307,11 +408,30 @@ int main(int argc, char* argv[])
 		// Comando de solicitud de informacion de usuario especifico
 		else if(command == "/infousuario")
 		{
-			string usernameinfo = input.substr(input.find(delimiter) + 1, input.length() - 1);
+			string info_username = input.substr(input.find(delimiter) + 1, input.length() - 1);
 			
 			connectedUserRequest *cUserRequest(new connectedUserRequest);
 			cUserRequest->set_userid(1);
-			cUserRequest->set_username(usernameinfo);
+			cUserRequest->set_username(info_username);
+
+			int info_user_id = 0;
+			for(int i=0; i<MAX_USERS; i++)
+			{
+				if(usernames[i] == "")
+				{
+					break;
+				}
+				if(usernames[i] == info_username)
+				{
+					info_user_id = users_ids[i];
+					break;
+				}
+			}
+
+			if(info_user_id != 0)
+			{
+				cUserRequest->set_userid(info_user_id);
+			}
 
 			ClientMessage cm;
 			cm.set_option(2);
@@ -332,7 +452,7 @@ int main(int argc, char* argv[])
 			cout << "\nMenu de opciones" << endl << endl;
 			cout << "-----------" << endl;
 			cout << "En cualquier momento, puedes ingresar los siguientes comandos segun lo que necesites" << endl << endl;
-			cout << "\tEnviar mensajes directos: /mensajedirecto <username> <mensaje>" << endl;
+			cout << "\tEnviar mensajes directos: /mensajedirecto <username> \"<mensaje>\"" << endl;
 			cout << "\tCambiar de status: /cambiarstatus <status>" << endl;
 			cout << "\tLista de usuarios conectados: /listado" << endl;
 			cout << "\tMostrar informacion de un usuario: /infousuario <username>" << endl;
@@ -348,7 +468,7 @@ int main(int argc, char* argv[])
 		}
 		
 		// Si no es ningun comando, broadcastear por default los mensajes a todos
-		else
+		else if(input != "")
 		{
 			BroadcastRequest *broadcastRequest(new BroadcastRequest);
 

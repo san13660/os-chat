@@ -14,20 +14,24 @@
 #include <string.h>
 #include <pthread.h>
 #include <iostream>
+#include <sstream>
+#include <ctime>
 #include "mensaje.pb.h"
 
 // Constantes
 using namespace std;
 using namespace chat;
 
-#define PORT 8080
 #define MAX_CLIENTS 99
+
+int port_number = 0;
 
 // Informacion de los clientes
 int clients_sockets[MAX_CLIENTS] = {0};
 string clients_names[MAX_CLIENTS];
 string clients_status[MAX_CLIENTS];
 string clients_ips[MAX_CLIENTS];
+int clients_inactivity_seconds[MAX_CLIENTS] = {0};
 
 // Funcion para mantenerse escuchando cualquier solicitud del parte del cliente
 void *listenClient(void *client_index_p_)
@@ -46,9 +50,9 @@ void *listenClient(void *client_index_p_)
 		// Verificar que el cliente siga conectado
 		if(valread == 0)
 		{
-			printf("CLIENT %d DISCONECTED\n", socket);
 			break;
 		}
+
 
 		string str(buffer);
 
@@ -62,24 +66,63 @@ void *listenClient(void *client_index_p_)
 		// La primera opcion es para sincronizar con el server
 		if(clientMessage.option() == 1)
 		{
-			clients_names[client_index] = clientMessage.synchronize().username();
+			bool unique_name = true;
+			for(int i=0; i<MAX_CLIENTS; i++)
+			{
+				if(clients_names[i] == clientMessage.synchronize().username())
+				{
+					unique_name = false;
+					break;
+				}
+			}
 
-			cout << "Client: " << socket << " username: " << clients_names[client_index] << endl;
+			if(unique_name)
+			{
+				clients_names[client_index] = clientMessage.synchronize().username();
+				if(clientMessage.synchronize().has_ip())
+				{
+					clients_ips[client_index] = clientMessage.synchronize().ip();
+				}
 
-			MyInfoResponse *miInfoResponse(new MyInfoResponse);
-			miInfoResponse->set_userid(socket);
+				cout << "Usuario " << socket << " se asigno el nombre: " << clients_names[client_index] << endl;
+
+				MyInfoResponse *miInfoResponse(new MyInfoResponse);
+				miInfoResponse->set_userid(socket);
 	
-			ServerMessage sm;
-			sm.set_option(4);
-			sm.set_allocated_myinforesponse(miInfoResponse);
+				ServerMessage sm;
+				sm.set_option(4);
+				sm.set_allocated_myinforesponse(miInfoResponse);
 
-			string binary;
-			sm.SerializeToString(&binary);
+				string binary;
+				sm.SerializeToString(&binary);
 
-			char cstr[binary.size() + 1];
-			strcpy(cstr, binary.c_str());
+				char cstr[binary.size() + 1];
+				strcpy(cstr, binary.c_str());
 
-			send(socket , cstr, strlen(cstr) , 0 ); 	
+				send(socket , cstr, strlen(cstr) , 0 );
+			}
+			else
+			{
+				cout << "Usuario " << socket << " intento usar un nombre existente (" << clientMessage.synchronize().username() << ")" << endl;
+
+				// ENVIO DE ERROR
+				ErrorResponse *errorResponse(new ErrorResponse);
+				errorResponse->set_errormessage("USUARIO REPETIDO");
+	
+				ServerMessage sm;
+				sm.set_option(3);
+				sm.set_allocated_error(errorResponse);
+
+				string binary;
+				sm.SerializeToString(&binary);
+
+				char cstr[binary.size() + 1];
+				strcpy(cstr, binary.c_str());
+				send(socket , cstr, strlen(cstr) , 0 );
+				break;
+			}			
+
+			
 		}
 		
 		// La segunda opcion es para enviar la lista de todos los users conectados
@@ -96,7 +139,7 @@ void *listenClient(void *client_index_p_)
 						connectedUser->set_username(clients_names[i]);
 						connectedUser->set_status(clients_status[i]);
 						connectedUser->set_userid(clients_sockets[i]);
-						connectedUser->set_ip("192");
+						connectedUser->set_ip(clients_ips[i]);
 					}
 				}
 			}
@@ -104,14 +147,18 @@ void *listenClient(void *client_index_p_)
 			else
 			{
 				for(int i=0;i<MAX_CLIENTS;i++){
-					if(clients_sockets[i] != 0 && clients_names[i] == clientMessage.connectedusers().username()){
-						ConnectedUser *connectedUser = connectedUserResponse->add_connectedusers();
-						connectedUser->set_username(clients_names[i]);
-						connectedUser->set_status(clients_status[i]);
-						connectedUser->set_userid(clients_sockets[i]);
-						connectedUser->set_ip("192");
-						found = true;
-						break;
+					if(clients_sockets[i] != 0)
+					{
+						if((clientMessage.connectedusers().has_username() && clients_names[i] == clientMessage.connectedusers().username()) || (clientMessage.connectedusers().has_userid() && clients_sockets[i] == clientMessage.connectedusers().userid()))
+						{
+							ConnectedUser *connectedUser = connectedUserResponse->add_connectedusers();
+							connectedUser->set_username(clients_names[i]);
+							connectedUser->set_status(clients_status[i]);
+							connectedUser->set_userid(clients_sockets[i]);
+							connectedUser->set_ip(clients_ips[i]);
+							found = true;
+							break;
+						}
 					}
 				}
 			}
@@ -219,8 +266,6 @@ void *listenClient(void *client_index_p_)
 		// Opcion de mensaje directo
 		else if(clientMessage.option() == 5)
 		{
-			cout << "Client " << socket << " sent direct message to " << clientMessage.directmessage().username() << endl;
-			
 			DirectMessage *directMessage(new DirectMessage);
 			directMessage->set_message(clientMessage.directmessage().message());
 			directMessage->set_userid(socket);
@@ -239,16 +284,21 @@ void *listenClient(void *client_index_p_)
 			bool found = false;
 
 			for(int i=0;i<MAX_CLIENTS;i++){
-				if(clients_sockets[i] != 0 && clients_names[i] == clientMessage.directmessage().username()){
-					send(clients_sockets[i] , cstr , strlen(cstr) , 0);
-					found = true;
-					break;
+				if(clients_sockets[i] != 0)
+				{
+					if((clientMessage.directmessage().has_username() && clients_names[i] == clientMessage.directmessage().username()) || (clientMessage.directmessage().has_userid() && clients_sockets[i] == clientMessage.directmessage().userid()))
+					{
+						send(clients_sockets[i] , cstr , strlen(cstr) , 0);
+						found = true;
+						break;
+					}
 				}
 			}
 			
 
 			if(found)
 			{
+				cout << "Ususario " << socket << " envio un mensaje directo a " << clientMessage.directmessage().username() << endl;
 				// ENVIO DE CONFIRMACION
 				DirectMessageResponse *directMessageResponse(new DirectMessageResponse);
 				directMessageResponse->set_messagestatus("MENSAJE DIRECTO ENVIADO");
@@ -295,12 +345,32 @@ void *listenClient(void *client_index_p_)
 		}
 	}
 
+	cout << "Usuario " << socket << " se ha desconectado" << endl;
 	// Si se sale del while, debe cerrar todas las listas, vaciar y cerrar sockets
 	clients_sockets[client_index] = 0;
 	clients_names[client_index] = "";
 	clients_status[client_index] = "";
 	close(socket);
 	free(client_index_p);
+	return NULL;
+}
+
+void *checkInactivity(void *var)
+{
+	while(1){
+		time_t result = time(nullptr);
+
+		for(int i=0;i<MAX_CLIENTS;i++)
+		{
+			if(clients_sockets[i] != 0 && result - clients_inactivity_seconds[i] > 30)
+			{
+				clients_status[i] = "INACTIVO";
+				clients_inactivity_seconds[i] = result;
+			}
+			
+		}
+		sleep(5);
+	}
 	return NULL;
 }
 
@@ -311,7 +381,7 @@ int main(int argc, char const *argv[])
 	
 	// Variables
 	stringstream ssPort(argv[1]);
-	ssPort >> portnum;
+	ssPort >> port_number;
 	int server_fd; 
 	struct sockaddr_in address; 
 	int opt = 1; 
@@ -331,7 +401,7 @@ int main(int argc, char const *argv[])
 	} 
 	address.sin_family = AF_INET; 
 	address.sin_addr.s_addr = INADDR_ANY; 
-	address.sin_port = htons( portnum ); 
+	address.sin_port = htons( port_number ); 
 	
 	if (bind(server_fd, (struct sockaddr *)&address, sizeof(address))<0) 
 	{ 
@@ -345,7 +415,10 @@ int main(int argc, char const *argv[])
 	}
 	
 	// Despues de lo anterior, se establece que inicio el server
-	cout << "SERVER STARTED" << endl;
+	cout << "SERVIDOR INICIADO" << endl;
+
+	pthread_t timethread;
+	pthread_create(&timethread, NULL, &checkInactivity, NULL);
 	
 	while(1){
 		// Esperar a que alguien solicite un socket nuevo al server
@@ -365,13 +438,15 @@ int main(int argc, char const *argv[])
 				clients_sockets[i] = new_socket;
 				clients_names[i] = "Anonimo";
 				clients_status[i] = "ACTIVO";
+				time_t result = time(nullptr);
+				clients_inactivity_seconds[i] = result;
 				*index = i;
 				break;
 			}
 		}
 
 		// Conexion exitosa del cliente y se le crea su propio thread
-		printf("CLIENT %d CONECTED\n", new_socket);
+		cout << "Usuario " << new_socket << " se ha conectado" << endl;
 		pthread_t thread;
 		pthread_create(&thread, NULL, &listenClient, index);
 	}
